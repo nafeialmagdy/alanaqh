@@ -713,6 +713,8 @@ svg.icon{display:inline-block;vertical-align:middle;}
 
 <!-- ═══════════ JAVASCRIPT ═══════════ -->
  <script src="https://cdn.jsdelivr.net/npm/heic2any/dist/heic2any.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
 
 <script>
@@ -745,7 +747,17 @@ const CATS = [
   {id:6,name:"نقشات",icon: '<img src="https://i.imgur.com/2x0pZ8p.png" width="22" height="22" style="border-radius:4px; object-fit:cover; background:#fff;">',count:1},
   {id:7,name:"مخططات",icon: '<img src="https://i.imgur.com/2x0pZ8p.png" width="22" height="22" style="border-radius:4px; object-fit:cover; background:#fff;">',count:1},
 ];
-let PRODS = [
+// ── FIREBASE SETUP ──
+// ⚠️ ضع رابط قاعدة بياناتك هنا بعد إنشائها من Firebase Console
+const firebaseConfig = {
+  databaseURL: "https://YOUR-PROJECT-ID-default-rtdb.firebaseio.com/"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+let PRODS = [];
+
+const DEFAULT_PRODS = [
   {id:1,name:"كشمير ياباني فاخر",cat:"الياباني",price:850,old:1100,disc:23,img:"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&h=700&fit=crop",isNew:true,isBest:false,stock:true,rating:4.8,reviews:124,desc:"قماش كشمير ياباني عالي الجودة، ناعم الملمس، مثالي للبدلات الرسمية والسترات الفاخرة."},
   {id:2,name:"صوف كوري ممتاز",cat:"الكوري",price:650,old:null,disc:0,img:"https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=700&fit=crop",isNew:false,isBest:true,stock:true,rating:4.9,reviews:89,desc:"صوف كوري فاخر بأعلى معايير الجودة، يتميز بمتانته وأناقته الاستثنائية."},
   {id:3,name:"قطن مصري 100%",cat:"القطن",price:320,old:400,disc:20,img:"https://images.unsplash.com/photo-1551488831-00ddcb6c6bd3?w=600&h=700&fit=crop",isNew:true,isBest:true,stock:true,rating:4.7,reviews:203,desc:"قطن مصري خالص من أجود الأنواع، يتميز بنعومته وقدرته على امتصاص الرطوبة."},
@@ -755,6 +767,20 @@ let PRODS = [
   {id:7,name:"مخططات إنجليزية",cat:"مخططات",price:420,old:null,disc:0,img:"https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?w=600&h=700&fit=crop",isNew:false,isBest:false,stock:true,rating:4.4,reviews:91,desc:"خطوط كلاسيكية بتصميم إنجليزي أصيل، مثالية للبدلات الرسمية."},
   {id:8,name:"كشمير كوري ناعم",cat:"الكوري",price:920,old:1100,disc:16,img:"https://images.unsplash.com/photo-1544966503-7cc5ac882d0e?w=600&h=700&fit=crop",isNew:true,isBest:true,stock:true,rating:4.9,reviews:145,desc:"كشمير كوري فائق النعومة، مزيج مثالي بين الجودة الآسيوية والتصميم العصري."},
 ];
+
+function loadProdsFromFirebase() {
+  db.ref('products').on('value', (snapshot) => {
+    const data = snapshot.val();
+    if (data) {
+      PRODS = data;
+    } else {
+      PRODS = DEFAULT_PRODS;
+      db.ref('products').set(PRODS);
+    }
+    filterProds();
+    if(currentPage==='admin') renderAdminTab('prods');
+  });
+}
 
 /* ── STATE ── */
 let cart = [];
@@ -1413,14 +1439,14 @@ function deleteProduct(id){
   filterProds();
 }
 function saveProdsToStorage(){
-  try{ localStorage.setItem('khayyat_prods', JSON.stringify(PRODS)); }catch(e){}
+  try {
+    db.ref('products').set(PRODS);
+  } catch(e) {
+    console.error("خطأ في حفظ البيانات في Firebase: ", e);
+  }
 }
 function loadProdsFromStorage(){
-  try{
-    const d=localStorage.getItem('khayyat_prods');
-    if(d){ PRODS=JSON.parse(d); }
-    else { saveProdsToStorage(); } /* حفظ المنتجات الافتراضية عند أول تشغيل */
-  }catch(e){}
+  // هذه الدالة أصبحت فارغة - الآن نستخدم loadProdsFromFirebase بدلاً منها
 }
 function openEditModal(id){
   const p=PRODS.find(x=>x.id===id);
@@ -1521,7 +1547,7 @@ document.addEventListener('click', function(e){
 });
 
 /* ── INIT ── */
-loadProdsFromStorage();
+loadProdsFromFirebase();
 renderCats();
 filterProds();
 showPage('home');
