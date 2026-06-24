@@ -1300,90 +1300,58 @@ function handleFileSelect(e){
   if(file) processFile(file);
 }
 function processFile(file) {
-
-  // استخراج الامتداد الحقيقي
   const ext = file.name.split('.').pop().toLowerCase();
-
-  // أنواع الملفات المسموح بها
   const allowedExt = ['jpg','jpeg','png','webp','gif','heic','heif'];
 
-  // التحقق من الامتداد بدل file.type
   if (!allowedExt.includes(ext)) {
     showToast('يرجى اختيار ملف صورة صالح (JPG, PNG, HEIC)', 'err');
     return;
   }
 
-  // التحقق من الحجم
-  if (file.size > 15 * 1024 * 1024) {
-    showToast('حجم الصورة يجب أن يكون أقل من 5MB', 'err');
-    return;
-  }
+  showToast('جاري معالجة الصورة... ⏳');
 
-  // إذا كان HEIC → نحوله إلى JPG
-  if (ext === "heic" || ext === "heif") {
-    heic2any({
-      blob: file,
-      toType: "image/jpeg",
-      quality: 0.9
-    })
-    .then(function (convertedBlob) {
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        compressImage(e.target.result, file.name.replace(ext,'jpg'), function(compressed){
-          uploadedImgData = compressed;
-          document.getElementById('preview-img').src = compressed;
-          document.getElementById('preview-filename').textContent = '✓ ' + file.name.replace(ext, 'jpg');
-          document.getElementById('upload-placeholder').style.display = 'none';
-          document.getElementById('upload-preview').style.display = 'block';
-          document.getElementById('af-img-file').style.pointerEvents = 'none';
-        });
-      };
-      reader.readAsDataURL(convertedBlob);
-    })
-    .catch(function (err) {
-      console.error(err);
-      showToast('تعذر قراءة ملف HEIC', 'err');
-    });
-
-    return;
-  }
-
-  // باقي الصيغ العادية
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    compressImage(e.target.result, file.name, function(compressed){
+  // دالة الضغط المركزية - تُصغّر أي صورة لأقل من 150KB
+  function compressAndShow(blob) {
+    const blobUrl = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = function() {
+      URL.revokeObjectURL(blobUrl);
+      const canvas = document.createElement('canvas');
+      // أقصى أبعاد 600x700 كافية للعرض في المتجر
+      const MAX_W = 600, MAX_H = 700;
+      let w = img.width, h = img.height;
+      const ratio = Math.min(MAX_W / w, MAX_H / h, 1);
+      w = Math.round(w * ratio);
+      h = Math.round(h * ratio);
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      // جودة 60% تعطي صوراً واضحة بأقل من 100KB في الغالب
+      const compressed = canvas.toDataURL('image/jpeg', 0.6);
       uploadedImgData = compressed;
       document.getElementById('preview-img').src = compressed;
-      document.getElementById('preview-filename').textContent = '✓ ' + file.name;
+      document.getElementById('preview-filename').textContent = '✓ ' + file.name.replace(/\.[^.]+$/, '.jpg');
       document.getElementById('upload-placeholder').style.display = 'none';
       document.getElementById('upload-preview').style.display = 'block';
       document.getElementById('af-img-file').style.pointerEvents = 'none';
-    });
-  };
+      showToast('تم تجهيز الصورة ✓');
+    };
+    img.onerror = function() { showToast('تعذّر قراءة الصورة', 'err'); };
+    img.src = blobUrl;
+  }
 
-  reader.readAsDataURL(file);
+  // HEIC → JPG أولاً ثم ضغط
+  if (ext === 'heic' || ext === 'heif') {
+    heic2any({ blob: file, toType: 'image/jpeg', quality: 0.8 })
+      .then(function(blob) { compressAndShow(blob); })
+      .catch(function(err) { console.error(err); showToast('تعذر قراءة ملف HEIC', 'err'); });
+    return;
+  }
+
+  // باقي الصيغ - ضغط مباشر
+  compressAndShow(file);
 }
 
-
-/* ضغط الصورة لتقليل حجمها قبل الحفظ في Firebase (الحد الأقصى ~800KB) */
-function compressImage(base64, filename, callback) {
-  const img = new Image();
-  img.onload = function() {
-    const canvas = document.createElement('canvas');
-    const MAX = 800; // أقصى عرض أو ارتفاع بالبكسل
-    let w = img.width, h = img.height;
-    if(w > MAX || h > MAX) {
-      if(w > h) { h = Math.round(h * MAX / w); w = MAX; }
-      else       { w = Math.round(w * MAX / h); h = MAX; }
-    }
-    canvas.width = w; canvas.height = h;
-    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-    // جودة 75% تعطي صوراً نظيفة بحجم صغير
-    const compressed = canvas.toDataURL('image/jpeg', 0.75);
-    callback(compressed);
-  };
-  img.src = base64;
-}
 
 function removeImage(e){
   e.stopPropagation();
